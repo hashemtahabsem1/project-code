@@ -1,0 +1,144 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[4]:
+
+
+import numpy as np
+#!pip install tensorflow
+import tensorflow as tf
+from tensorflow import keras
+from PIL import Image
+import os
+#!pip install scikit-learn
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+import time
+
+
+# Load and preprocess the dataset
+def load_dataset(clean_dir, steganographic_dir):
+    X = []
+    y = []
+
+    # Load clean images
+    clean_images = os.listdir(clean_dir)
+    for image_file in clean_images:
+        image_path = os.path.join(clean_dir, image_file)
+        image = Image.open(image_path)
+        image = image.resize((128, 128))  # Resize the image to a fixed size
+        image_array = np.array(image) / 255.0  # Normalize pixel values between 0 and 1
+        X.append(image_array)
+        y.append(0)  # Label 0 for clean images
+
+    # Load steganographic images
+    steganographic_images = os.listdir(steganographic_dir)
+    for image_file in steganographic_images:
+        image_path = os.path.join(steganographic_dir, image_file)
+        image = Image.open(image_path)
+        image = image.resize((128, 128))  # Resize the image to a fixed size
+        image_array = np.array(image) / 255.0  # Normalize pixel values between 0 and 1
+        X.append(image_array)
+        y.append(1)  # Label 1 for steganographic images
+
+    X = np.array(X)
+    y = np.array(y)
+
+    return X, y
+
+# Define the CNN model architecture
+def create_model(input_shape):
+    model = keras.models.Sequential([
+        keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=input_shape),
+        keras.layers.MaxPooling2D((2, 2)),
+        keras.layers.Conv2D(64, (3, 3), activation='relu'),
+        keras.layers.MaxPooling2D((2, 2)),
+        keras.layers.Flatten(),
+        keras.layers.Dense(64, activation='relu'),
+        keras.layers.Dense(2, activation='sigmoid')
+    ])
+    return model
+
+# Load the clean and steganographic datasets
+clean_dir = r'C:\Users\hashe\Downloads\psut\uni 4th year 2nd sem\software engineering\phase 3 code\cover2'
+steganographic_dir = r"C:\Users\hashe\Downloads\psut\uni 4th year 2nd sem\software engineering\phase 3 code\stegano"
+
+X, y = load_dataset(clean_dir, steganographic_dir)
+
+# Split the dataset into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Reshape the input data to match the expected input shape of the CNN model
+input_shape = X_train[0].shape
+X_train = X_train.reshape(-1, *input_shape)
+X_test = X_test.reshape(-1, *input_shape)
+
+# Create the CNN model
+model = create_model(input_shape)
+
+# Compile the model
+model.compile(optimizer='adam',
+              loss='sparse_categorical_crossentropy',
+              metrics=['accuracy'])
+
+start_time = time.time()
+
+# Train the model
+model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+
+# Stop the timer and calculate the running time
+end_time = time.time()
+running_time = end_time - start_time
+print("Running time:", running_time, "seconds")
+
+# Compute the confusion matrix
+y_pred = model.predict(X_test)
+decision_threshold = 0.6  # Set your desired decision threshold
+y_pred = (y_pred[:, 1] >= decision_threshold).astype(int)
+cm = confusion_matrix(y_test, y_pred)
+
+
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+
+
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, cmap='Blues', fmt='d', cbar=False)
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.show()
+
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+
+
+
+def detect_steganography(image_path):
+    # Load and preprocess the image
+    image = Image.open(image_path)
+    image = image.resize((128, 128))  # Resize the image to a fixed size
+    image_array = np.array(image) / 255.0  # Normalize pixel values between 0 and 1
+    image_array = np.expand_dims(image_array, axis=0)  # Add batch dimension
+
+    # Make predictions using the model
+    predictions = model.predict(image_array)
+
+    # Get the predicted class (0 for clean image, 1 for steganographic image)
+    predicted_class = np.argmax(predictions[0])
+
+    # Return the result
+    if predicted_class == 0:
+        return 'Clean image'
+    else:
+        return 'Steganographic image'
+
+
+# Usage example
+image_path = r"C:\Users\hashe\Downloads\psut\uni 4th year 2nd sem\software engineering\phase 3 code\test\2438.jpg"  # Replace with the path to your image file
+result = detect_steganography(image_path)
+print(result)
+
